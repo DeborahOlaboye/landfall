@@ -142,3 +142,20 @@
 (define-read-only (get-donor-given (donor principal) (asset (optional principal)))
   (default-to u0 (map-get? donor-given { donor: donor, asset: asset }))
 )
+
+;; The donor-facing check. Given a receipt, restate plainly what happened
+;; and in which block - the claim the donor can verify for themselves.
+(define-read-only (verify (receipt-id uint))
+  (match (map-get? receipts receipt-id)
+    r (ok {
+        landed: true,
+        donor: (get donor r),
+        recipient-id: (get recipient-id r),
+        payout: (get payout r),
+        amount: (get amount r),
+        asset: (get asset r),
+        stacks-height: (get stacks-height r)
+      })
+    ERR-UNKNOWN-RECEIPT
+  )
+)
