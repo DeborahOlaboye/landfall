@@ -152,3 +152,18 @@
 (define-read-only (get-recipient-count)
   (- (var-get next-recipient-id) u1)
 )
+
+;; Landfall core calls this before every disbursement: is this a live
+;; recipient, vouched for by an organizer still in good standing?
+(define-read-only (is-payable (recipient-id uint))
+  (match (map-get? recipients recipient-id)
+    r (and
+        (get active r)
+        (match (map-get? organizers (get organizer r))
+          org (get active org)
+          false
+        )
+      )
+    false
+  )
+)
