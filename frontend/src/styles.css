@@ -1,0 +1,102 @@
+:root {
+  --ink: #131815;
+  --muted: #5b6761;
+  --rule: #dbe0d9;
+  --accent: #0b7f52;
+  --error: #972b2b;
+  color-scheme: light dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 48px 20px;
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: #f5f6f3;
+}
+
+main { max-width: 34rem; margin: 0 auto; }
+
+h1 { margin: 0 0 6px; font-size: 1.9rem; letter-spacing: -0.02em; }
+.tagline { margin: 0 0 32px; color: var(--muted); }
+
+label {
+  display: block;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.row { display: flex; gap: 8px; }
+
+input {
+  flex: 1;
+  padding: 11px 13px;
+  font: inherit;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: #fff;
+}
+
+button {
+  padding: 11px 20px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.notice, .error {
+  padding: 13px 15px;
+  border-radius: 3px;
+  font-size: 14.5px;
+  margin-bottom: 20px;
+}
+.notice { background: #f5eadb; border-left: 3px solid #9e540a; }
+.error { background: #f6e7e7; border-left: 3px solid var(--error); color: var(--error); }
+
+.receipt {
+  margin-top: 28px;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--accent);
+  padding: 24px;
+}
+
+.landed {
+  margin: 0 0 18px;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+dl { margin: 0; display: flex; flex-direction: column; gap: 13px; }
+dl > div { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+dt { font-size: 13px; color: var(--muted); }
+dd { margin: 0; font-weight: 500; text-align: right; word-break: break-all; }
+.mono { font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+
+.footnote {
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  body { background: #0e1311; color: #e7ece8; }
+  :root { --ink: #e7ece8; --muted: #93a29a; --rule: #28322d; --accent: #4fbf8b; --error: #de8383; }
+  input, .receipt { background: #151c19; color: inherit; }
+  button { color: #0e1311; }
+  .notice { background: #2f2413; }
+  .error { background: #2d1919; }
+}
