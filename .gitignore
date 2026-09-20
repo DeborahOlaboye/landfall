@@ -1,16 +1,23 @@
+node_modules
+dist
+.DS_Store
 
+# Clarinet
 **/settings/Mainnet.toml
 **/settings/Testnet.toml
 .cache/**
 history.txt
+costs-reports.json
+# Regenerated on every check and test run; real deployment plans stay tracked.
+contracts/deployments/default.simnet-plan.yaml
+
+# Editors
+.vscode
+.idea
 
 logs
 *.log
 npm-debug.log*
 coverage
 *.info
-costs-reports.json
-node_modules
-
-# Auto-regenerated on every check/test run; real deployment plans stay tracked.
-deployments/default.simnet-plan.yaml
+*.tsbuildinfo
