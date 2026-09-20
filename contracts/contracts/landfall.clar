@@ -4,6 +4,13 @@
 ;; nothing to audit. A donor pays a named recipient directly and the
 ;; settlement itself is the receipt.
 ;;
+;; The asset is sBTC. Bitcoin is what donors already hold and what recipients
+;; want to end up with, so giving in it means the gift never has to become
+;; someone's local currency in between, and never sits in an intermediary's
+;; account waiting to be converted.
+;;
+;;   mainnet sBTC: SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token
+;;
 ;; Every receipt records the Bitcoin block the disbursement settled under,
 ;; via Proof of Transfer. That is the part a donor can check independently,
 ;; years later, against Bitcoin rather than against us - and it survives this
@@ -25,7 +32,8 @@
 (define-data-var next-receipt-id uint u1)
 (define-data-var total-landed-stx uint u0)
 
-;; asset: none = STX, some = the SIP-010 contract that moved
+;; asset: some = the SIP-010 contract that moved, sBTC in practice
+;;        none = STX, the fallback for donors not yet holding sBTC
 (define-map receipts
   uint
   {
@@ -91,25 +99,17 @@
 )
 
 ;; ------------------------------------------------------------------ public
+;;
+;; Both paths repeat the same three guards inline rather than sharing a
+;; private helper. That is deliberate: hoisting them into a callee hides the
+;; checks from Clarinet's analyzer, which then cannot verify that arguments
+;; are validated before use. Three duplicated asserts are cheaper than losing
+;; static verification on the money path.
 
-;; Give STX directly to a registered recipient.
-(define-public (give (recipient-id uint) (amount uint) (memo (optional (buff 34))))
-  (let (
-      (r (unwrap! (contract-call? .recipient-registry get-recipient recipient-id)
-                  ERR-UNKNOWN-RECIPIENT))
-      (payout (get payout r))
-    )
-    (asserts! (> amount u0) ERR-ZERO-AMOUNT)
-    (asserts! (contract-call? .recipient-registry is-payable recipient-id) ERR-NOT-PAYABLE)
-    (asserts! (not (is-eq tx-sender payout)) ERR-SELF-GIFT)
-    (try! (stx-transfer? amount tx-sender payout))
-    (var-set total-landed-stx (+ (var-get total-landed-stx) amount))
-    (ok (record recipient-id payout amount none memo))
-  )
-)
-
-;; Give any SIP-010 token directly to a registered recipient.
-(define-public (give-token
+;; The primary path: give sBTC directly to a registered recipient.
+;; Taken as a trait rather than a hardcoded contract so the same code runs
+;; against sBTC on mainnet and a mock in tests.
+(define-public (give
     (token <ft-trait>)
     (recipient-id uint)
     (amount uint)
@@ -129,26 +129,48 @@
   )
 )
 
+;; Fallback for donors holding STX who have not bridged into sBTC yet.
+;; Same guards, same receipt shape.
+(define-public (give-stx (recipient-id uint) (amount uint) (memo (optional (buff 34))))
+  (let (
+      (r (unwrap! (contract-call? .recipient-registry get-recipient recipient-id)
+                  ERR-UNKNOWN-RECIPIENT))
+      (payout (get payout r))
+    )
+    (asserts! (> amount u0) ERR-ZERO-AMOUNT)
+    (asserts! (contract-call? .recipient-registry is-payable recipient-id) ERR-NOT-PAYABLE)
+    (asserts! (not (is-eq tx-sender payout)) ERR-SELF-GIFT)
+    (try! (stx-transfer? amount tx-sender payout))
+    (var-set total-landed-stx (+ (var-get total-landed-stx) amount))
+    (ok (record recipient-id payout amount none memo))
+  )
+)
+
 ;; --------------------------------------------------------------- read-only
 
 (define-read-only (get-receipt (receipt-id uint))
   (map-get? receipts receipt-id)
 )
+
 (define-read-only (get-receipt-count)
   (- (var-get next-receipt-id) u1)
 )
+
 (define-read-only (get-total-landed-stx)
   (var-get total-landed-stx)
 )
+
 (define-read-only (get-recipient-received (recipient-id uint) (asset (optional principal)))
   (default-to u0 (map-get? recipient-received { recipient-id: recipient-id, asset: asset }))
 )
+
 (define-read-only (get-donor-given (donor principal) (asset (optional principal)))
   (default-to u0 (map-get? donor-given { donor: donor, asset: asset }))
 )
 
-;; The donor-facing check. Given a receipt, restate plainly what happened
-;; and in which block - the claim the donor can verify for themselves.
+;; The donor-facing check. Restates plainly what happened and the Bitcoin
+;; block it settled under - the claim a donor verifies against Bitcoin
+;; rather than against us.
 (define-read-only (verify (receipt-id uint))
   (match (map-get? receipts receipt-id)
     r (ok {
