@@ -49,3 +49,36 @@
     registered-at: uint
   }
 )
+
+;; ------------------------------------------------------------- steward-only
+
+(define-public (set-steward (new-steward principal))
+  (begin
+    (asserts! (is-eq tx-sender (var-get steward)) ERR-NOT-STEWARD)
+    (var-set steward new-steward)
+    (print { event: "steward-changed", steward: new-steward })
+    (ok true)
+  )
+)
+(define-public (add-organizer (who principal) (name (string-utf8 64)))
+  (begin
+    (asserts! (is-eq tx-sender (var-get steward)) ERR-NOT-STEWARD)
+    (asserts! (is-none (map-get? organizers who)) ERR-ORGANIZER-EXISTS)
+    (map-set organizers who {
+      name: name,
+      active: true,
+      joined-at: stacks-block-height,
+      recipients-registered: u0
+    })
+    (print { event: "organizer-added", organizer: who, name: name })
+    (ok true)
+  )
+)
+(define-public (set-organizer-active (who principal) (active bool))
+  (let ((org (unwrap! (map-get? organizers who) ERR-UNKNOWN-ORGANIZER)))
+    (asserts! (is-eq tx-sender (var-get steward)) ERR-NOT-STEWARD)
+    (map-set organizers who (merge org { active: active }))
+    (print { event: "organizer-status", organizer: who, active: active })
+    (ok true)
+  )
+)
