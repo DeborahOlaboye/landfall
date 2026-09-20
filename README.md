@@ -1,6 +1,6 @@
 # Landfall
 
-Direct giving with proof of arrival, on Stacks.
+Direct giving in sBTC, with proof of arrival anchored to Bitcoin.
 
 ## The idea
 
@@ -15,9 +15,14 @@ technology - it's that you end up selling accountability software to the party
 being held accountable. Landfall sidesteps it by removing the institution from
 the money path entirely. Nothing to audit, because nobody else held the funds.
 
-Every disbursement is recorded on chain at the block it landed in. That's the
-part a donor can check independently, years later, without trusting that this
-contract or the company behind it still exists.
+The asset is sBTC. Bitcoin is what donors already hold and what recipients want
+to end up with, so the gift never has to become someone's local currency in
+between, and never sits in an intermediary's account waiting to be converted.
+Mainnet sBTC is `SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token`.
+
+Every receipt names the Bitcoin block the disbursement settled under, via Proof
+of Transfer. That's what a donor checks - against Bitcoin, not against us, and
+it stays true if this contract and the company behind it both disappear.
 
 ## The hard problem, and how this handles it
 
@@ -35,37 +40,55 @@ Personal details never touch the chain. `profile` is a hash of the record the
 organizer holds off-chain, so they can prove later that it hasn't been altered
 without publishing anyone's identity.
 
-## Contracts
+## Layout
+
+```
+contracts/    Clarinet project - Clarity contracts and their tests
+frontend/     Vite + React app for checking a receipt
+```
+
+### Contracts
 
 | Contract | Role |
 |---|---|
 | `recipient-registry` | Organizers, recipients, and who vouched for whom |
-| `landfall` | Disbursements in STX or any SIP-010 token, and the receipts |
-| `sip-010-trait` | Standard fungible-token trait, so any SIP-010 asset works |
+| `landfall` | Disbursements and receipts |
+| `sip-010-trait` | Fungible-token trait, so sBTC is passed in rather than hardcoded |
+| `mock-sbtc` | Test-only stand-in for sBTC. Never deployed off a test chain |
 
 Key entry points:
 
-- `landfall::give (recipient-id, amount, memo)` - send STX, get a receipt id
-- `landfall::give-token (token, recipient-id, amount, memo)` - same with a SIP-010 token
-- `landfall::verify (receipt-id)` - restate what happened and in which block
+- `landfall::give (token, recipient-id, amount, memo)` - the primary path, sBTC
+- `landfall::give-stx (recipient-id, amount, memo)` - fallback for donors without sBTC
+- `landfall::verify (receipt-id)` - what landed, where, and under which Bitcoin block
 - `recipient-registry::register-recipient (payout, profile)` - organizers only
 
 ## Running it
 
 ```sh
-clarinet check      # 3 contracts, 0 errors
+cd contracts
 npm install
-npm test            # 18 tests
+clarinet check      # 4 contracts, 0 errors
+npm test            # 22 tests
 clarinet console    # poke at it interactively
 ```
 
-Two `check_checker` warnings remain on `register-recipient`. They're expected:
-the analyzer can't see that `(unwrap! (map-get? organizers tx-sender))` is the
-authorization check. Left in place deliberately rather than suppressed.
+```sh
+cd frontend
+npm install
+cp .env.example .env    # set VITE_DEPLOYER_ADDRESS once deployed
+npm run dev
+```
+
+Six `check_checker` warnings remain: four in `mock-sbtc` (test-only) and two in
+`register-recipient`, where the analyzer can't see that
+`(unwrap! (map-get? organizers tx-sender))` is the authorization check. Left in
+place deliberately rather than suppressed, so the remaining warnings still mean
+something.
 
 ## Status
 
-Contracts and tests only. No frontend, no deployment, nothing on testnet yet.
+Contracts, tests and a frontend skeleton. Nothing deployed to testnet yet.
 
 Deliberately still open:
 
