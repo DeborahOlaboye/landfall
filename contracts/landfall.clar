@@ -103,3 +103,24 @@
     (ok (record recipient-id payout amount none memo))
   )
 )
+
+;; Give any SIP-010 token directly to a registered recipient.
+(define-public (give-token
+    (token <ft-trait>)
+    (recipient-id uint)
+    (amount uint)
+    (memo (optional (buff 34)))
+  )
+  (let (
+      (r (unwrap! (contract-call? .recipient-registry get-recipient recipient-id)
+                  ERR-UNKNOWN-RECIPIENT))
+      (payout (get payout r))
+    )
+    (asserts! (> amount u0) ERR-ZERO-AMOUNT)
+    (asserts! (contract-call? .recipient-registry is-payable recipient-id) ERR-NOT-PAYABLE)
+    (asserts! (not (is-eq tx-sender payout)) ERR-SELF-GIFT)
+    (unwrap! (contract-call? token transfer amount tx-sender payout memo)
+             ERR-TRANSFER-FAILED)
+    (ok (record recipient-id payout amount (some (contract-of token)) memo))
+  )
+)
