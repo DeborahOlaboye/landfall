@@ -10,6 +10,8 @@ const stranger = accounts.get("wallet_4")!;
 
 const REGISTRY = "recipient-registry";
 const CORE = "landfall";
+const SBTC = "mock-sbtc";
+const sbtcContract = `${deployer}.${SBTC}`;
 
 // A 32-byte hash standing in for the off-chain profile the organizer holds.
 const PROFILE = Cl.bufferFromHex("a".repeat(64));
@@ -27,8 +29,8 @@ const ERR_NOT_PAYABLE = 201;
 const ERR_ZERO_AMOUNT = 202;
 const ERR_SELF_GIFT = 205;
 
-/** Admit an organizer and register one recipient. Returns the recipient id. */
-function seed() {
+/** Admit an organizer, register one recipient, fund the donor with sBTC. */
+function seed(sats = 100_000_000) {
   simnet.callPublicFn(
     REGISTRY,
     "add-organizer",
@@ -42,7 +44,18 @@ function seed() {
     organizer,
   );
   expect(reg.result).toBeOk(Cl.uint(1));
+  simnet.callPublicFn(SBTC, "mint", [Cl.uint(sats), Cl.principal(donor)], deployer);
   return 1;
+}
+
+/** Give sBTC through the primary path. */
+function giveSbtc(sats: number, sender = donor, recipientId = 1) {
+  return simnet.callPublicFn(
+    CORE,
+    "give",
+    [Cl.contractPrincipal(deployer, SBTC), Cl.uint(recipientId), Cl.uint(sats), Cl.none()],
+    sender,
+  );
 }
 
 describe("recipient-registry: who may vouch", () => {
@@ -86,12 +99,7 @@ describe("recipient-registry: who may vouch", () => {
 describe("recipient-registry: vouching for people", () => {
   it("lets an active organizer register a recipient", () => {
     seed();
-    const { result } = simnet.callReadOnlyFn(
-      REGISTRY,
-      "is-payable",
-      [Cl.uint(1)],
-      donor,
-    );
+    const { result } = simnet.callReadOnlyFn(REGISTRY, "is-payable", [Cl.uint(1)], donor);
     expect(result).toBeBool(true);
   });
 
@@ -158,56 +166,72 @@ describe("recipient-registry: vouching for people", () => {
   });
 });
 
-describe("landfall: money that lands", () => {
+describe("landfall: sBTC that lands", () => {
   beforeEach(() => {
     seed();
   });
 
-  it("moves STX to the recipient and writes a receipt", () => {
-    const before = simnet.getAssetsMap().get("STX")?.get(recipient) ?? 0n;
-
-    const { result } = simnet.callPublicFn(
-      CORE,
-      "give",
-      [Cl.uint(1), Cl.uint(1_000_000), Cl.none()],
-      donor,
-    );
+  it("moves sBTC to the recipient and writes a receipt", () => {
+    const { result } = giveSbtc(50_000);
     expect(result).toBeOk(Cl.uint(1));
 
-    const after = simnet.getAssetsMap().get("STX")?.get(recipient) ?? 0n;
-    expect(after - before).toBe(1_000_000n);
+    const bal = simnet.callReadOnlyFn(
+      SBTC,
+      "get-balance",
+      [Cl.principal(recipient)],
+      donor,
+    );
+    expect(bal.result).toBeOk(Cl.uint(50_000));
   });
 
-  it("writes a receipt a donor can check for themselves", () => {
-    simnet.callPublicFn(
-      CORE,
-      "give",
-      [Cl.uint(1), Cl.uint(500_000), Cl.none()],
-      donor,
-    );
-    const { result } = simnet.callReadOnlyFn(
-      CORE,
-      "get-receipt",
-      [Cl.uint(1)],
-      donor,
-    );
+  it("records the Bitcoin block the disbursement settled under", () => {
+    giveSbtc(50_000);
+    const { result } = simnet.callReadOnlyFn(CORE, "get-receipt", [Cl.uint(1)], donor);
     const receipt = (result as any).value.value;
     expect(receipt.donor).toStrictEqual(Cl.principal(donor));
     expect(receipt.payout).toStrictEqual(Cl.principal(recipient));
-    expect(receipt.amount).toStrictEqual(Cl.uint(500_000));
-    expect(receipt.asset).toStrictEqual(Cl.none());
-    // The block it landed in - checkable later without trusting us.
-    expect(Number((receipt["stacks-height"] as any).value)).toBeGreaterThan(0);
+    expect(receipt.amount).toStrictEqual(Cl.uint(50_000));
+    // The claim a donor checks against Bitcoin rather than against us.
+    expect(Number((receipt["bitcoin-height"] as any).value)).toBeGreaterThan(0);
+  });
+
+  it("tags the receipt with the sBTC contract that moved", () => {
+    giveSbtc(1_000);
+    const { result } = simnet.callReadOnlyFn(CORE, "get-receipt", [Cl.uint(1)], donor);
+    const receipt = (result as any).value.value;
+    expect(receipt.asset).toStrictEqual(Cl.some(Cl.contractPrincipal(deployer, SBTC)));
+  });
+
+  it("keeps sBTC and STX totals separate", () => {
+    giveSbtc(800);
+    simnet.callPublicFn(CORE, "give-stx", [Cl.uint(1), Cl.uint(300), Cl.none()], donor);
+
+    const inSbtc = simnet.callReadOnlyFn(
+      CORE,
+      "get-recipient-received",
+      [Cl.uint(1), Cl.some(Cl.contractPrincipal(deployer, SBTC))],
+      donor,
+    );
+    expect(inSbtc.result).toBeUint(800);
+
+    const inStx = simnet.callReadOnlyFn(
+      CORE,
+      "get-recipient-received",
+      [Cl.uint(1), Cl.none()],
+      donor,
+    );
+    expect(inStx.result).toBeUint(300);
   });
 
   it("accumulates totals for the recipient and the donor", () => {
-    simnet.callPublicFn(CORE, "give", [Cl.uint(1), Cl.uint(300), Cl.none()], donor);
-    simnet.callPublicFn(CORE, "give", [Cl.uint(1), Cl.uint(700), Cl.none()], donor);
+    giveSbtc(300);
+    giveSbtc(700);
+    const asset = Cl.some(Cl.contractPrincipal(deployer, SBTC));
 
     const received = simnet.callReadOnlyFn(
       CORE,
       "get-recipient-received",
-      [Cl.uint(1), Cl.none()],
+      [Cl.uint(1), asset],
       donor,
     );
     expect(received.result).toBeUint(1000);
@@ -215,47 +239,34 @@ describe("landfall: money that lands", () => {
     const given = simnet.callReadOnlyFn(
       CORE,
       "get-donor-given",
-      [Cl.principal(donor), Cl.none()],
+      [Cl.principal(donor), asset],
       donor,
     );
     expect(given.result).toBeUint(1000);
   });
 
   it("verify() restates what happened", () => {
-    simnet.callPublicFn(CORE, "give", [Cl.uint(1), Cl.uint(42), Cl.none()], donor);
+    giveSbtc(42);
     const { result } = simnet.callReadOnlyFn(CORE, "verify", [Cl.uint(1)], stranger);
     const v = (result as any).value.value;
     expect(v.landed).toStrictEqual(Cl.bool(true));
     expect(v.amount).toStrictEqual(Cl.uint(42));
+    expect(Number((v["bitcoin-height"] as any).value)).toBeGreaterThan(0);
   });
 
   it("refuses an unknown recipient", () => {
-    const { result } = simnet.callPublicFn(
-      CORE,
-      "give",
-      [Cl.uint(999), Cl.uint(100), Cl.none()],
-      donor,
-    );
+    const { result } = giveSbtc(100, donor, 999);
     expect(result).toBeErr(Cl.uint(ERR_UNKNOWN_RECIPIENT));
   });
 
   it("refuses a zero amount", () => {
-    const { result } = simnet.callPublicFn(
-      CORE,
-      "give",
-      [Cl.uint(1), Cl.uint(0), Cl.none()],
-      donor,
-    );
+    const { result } = giveSbtc(0);
     expect(result).toBeErr(Cl.uint(ERR_ZERO_AMOUNT));
   });
 
   it("refuses giving to yourself", () => {
-    const { result } = simnet.callPublicFn(
-      CORE,
-      "give",
-      [Cl.uint(1), Cl.uint(100), Cl.none()],
-      recipient,
-    );
+    simnet.callPublicFn(SBTC, "mint", [Cl.uint(1000), Cl.principal(recipient)], deployer);
+    const { result } = giveSbtc(100, recipient);
     expect(result).toBeErr(Cl.uint(ERR_SELF_GIFT));
   });
 
@@ -266,12 +277,7 @@ describe("landfall: money that lands", () => {
       [Cl.uint(1), Cl.bool(false)],
       organizer,
     );
-    const { result } = simnet.callPublicFn(
-      CORE,
-      "give",
-      [Cl.uint(1), Cl.uint(100), Cl.none()],
-      donor,
-    );
+    const { result } = giveSbtc(100);
     expect(result).toBeErr(Cl.uint(ERR_NOT_PAYABLE));
   });
 
@@ -284,18 +290,50 @@ describe("landfall: money that lands", () => {
       [Cl.principal(organizer), Cl.bool(false)],
       deployer,
     );
-    const { result } = simnet.callPublicFn(
-      CORE,
-      "give",
-      [Cl.uint(1), Cl.uint(100), Cl.none()],
-      donor,
-    );
+    const { result } = giveSbtc(100);
     expect(result).toBeErr(Cl.uint(ERR_NOT_PAYABLE));
   });
 
   it("leaves no receipt behind when a gift is refused", () => {
-    simnet.callPublicFn(CORE, "give", [Cl.uint(1), Cl.uint(0), Cl.none()], donor);
+    giveSbtc(0);
     const { result } = simnet.callReadOnlyFn(CORE, "get-receipt-count", [], donor);
     expect(result).toBeUint(0);
+  });
+});
+
+describe("landfall: the STX fallback", () => {
+  beforeEach(() => {
+    seed();
+  });
+
+  it("moves STX for donors who have not bridged into sBTC yet", () => {
+    const before = simnet.getAssetsMap().get("STX")?.get(recipient) ?? 0n;
+    const { result } = simnet.callPublicFn(
+      CORE,
+      "give-stx",
+      [Cl.uint(1), Cl.uint(1_000_000), Cl.none()],
+      donor,
+    );
+    expect(result).toBeOk(Cl.uint(1));
+    const after = simnet.getAssetsMap().get("STX")?.get(recipient) ?? 0n;
+    expect(after - before).toBe(1_000_000n);
+  });
+
+  it("applies the same guards as the sBTC path", () => {
+    const zero = simnet.callPublicFn(
+      CORE,
+      "give-stx",
+      [Cl.uint(1), Cl.uint(0), Cl.none()],
+      donor,
+    );
+    expect(zero.result).toBeErr(Cl.uint(ERR_ZERO_AMOUNT));
+
+    const self = simnet.callPublicFn(
+      CORE,
+      "give-stx",
+      [Cl.uint(1), Cl.uint(100), Cl.none()],
+      recipient,
+    );
+    expect(self.result).toBeErr(Cl.uint(ERR_SELF_GIFT));
   });
 });
