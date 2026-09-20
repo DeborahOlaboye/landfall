@@ -10,6 +10,11 @@ path = "contracts/sip-010-trait.clar"
 clarity_version = 3
 epoch = 3.1
 
+[contracts.mock-sbtc]
+path = "contracts/mock-sbtc.clar"
+clarity_version = 3
+epoch = 3.1
+
 [contracts.recipient-registry]
 path = "contracts/recipient-registry.clar"
 clarity_version = 3
