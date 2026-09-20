@@ -11,3 +11,6 @@ coverage
 *.info
 costs-reports.json
 node_modules
+
+# Auto-regenerated on every check/test run; real deployment plans stay tracked.
+deployments/default.simnet-plan.yaml
