@@ -111,3 +111,29 @@
     (ok recipient-id)
   )
 )
+
+;; A recipient's circumstances change - they move, they no longer qualify,
+;; someone else needs the slot. Only the organizer who vouched can change this.
+(define-public (set-recipient-active (recipient-id uint) (active bool))
+  (let ((r (unwrap! (map-get? recipients recipient-id) ERR-UNKNOWN-RECIPIENT)))
+    (asserts! (is-eq tx-sender (get organizer r)) ERR-NOT-OWNING-ORGANIZER)
+    (map-set recipients recipient-id (merge r { active: active }))
+    (print { event: "recipient-status", recipient-id: recipient-id, active: active })
+    (ok true)
+  )
+)
+
+;; Phone lost, wallet rotated, mobile-money number changed. Common in practice.
+(define-public (update-payout (recipient-id uint) (new-payout principal))
+  (let ((r (unwrap! (map-get? recipients recipient-id) ERR-UNKNOWN-RECIPIENT)))
+    (asserts! (is-eq tx-sender (get organizer r)) ERR-NOT-OWNING-ORGANIZER)
+    (map-set recipients recipient-id (merge r { payout: new-payout }))
+    (print {
+      event: "payout-updated",
+      recipient-id: recipient-id,
+      payout: new-payout,
+      previous: (get payout r)
+    })
+    (ok true)
+  )
+)
