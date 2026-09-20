@@ -124,3 +124,21 @@
     (ok (record recipient-id payout amount (some (contract-of token)) memo))
   )
 )
+
+;; --------------------------------------------------------------- read-only
+
+(define-read-only (get-receipt (receipt-id uint))
+  (map-get? receipts receipt-id)
+)
+(define-read-only (get-receipt-count)
+  (- (var-get next-receipt-id) u1)
+)
+(define-read-only (get-total-landed-stx)
+  (var-get total-landed-stx)
+)
+(define-read-only (get-recipient-received (recipient-id uint) (asset (optional principal)))
+  (default-to u0 (map-get? recipient-received { recipient-id: recipient-id, asset: asset }))
+)
+(define-read-only (get-donor-given (donor principal) (asset (optional principal)))
+  (default-to u0 (map-get? donor-given { donor: donor, asset: asset }))
+)
