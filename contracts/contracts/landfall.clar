@@ -4,9 +4,10 @@
 ;; nothing to audit. A donor pays a named recipient directly and the
 ;; settlement itself is the receipt.
 ;;
-;; Every disbursement is recorded on chain at the block it landed in. That is
-;; the part a donor can check independently, years later, without trusting
-;; that this contract - or the company that deployed it - still exists.
+;; Every receipt records the Bitcoin block the disbursement settled under,
+;; via Proof of Transfer. That is the part a donor can check independently,
+;; years later, against Bitcoin rather than against us - and it survives this
+;; contract, and the company that deployed it, ceasing to exist.
 
 (use-trait ft-trait .sip-010-trait.sip-010-trait)
 
@@ -34,7 +35,8 @@
     amount: uint,
     asset: (optional principal),
     memo: (optional (buff 34)),
-    stacks-height: uint
+    stacks-height: uint,
+    bitcoin-height: uint
   }
 )
 
@@ -64,7 +66,8 @@
       amount: amount,
       asset: asset,
       memo: memo,
-      stacks-height: stacks-block-height
+      stacks-height: stacks-block-height,
+      bitcoin-height: burn-block-height
     })
     (map-set recipient-received recipient-key
       (+ (default-to u0 (map-get? recipient-received recipient-key)) amount))
@@ -80,7 +83,8 @@
       amount: amount,
       asset: asset,
       memo: memo,
-      stacks-height: stacks-block-height
+      stacks-height: stacks-block-height,
+      bitcoin-height: burn-block-height
     })
     receipt-id
   )
@@ -154,7 +158,8 @@
         payout: (get payout r),
         amount: (get amount r),
         asset: (get asset r),
-        stacks-height: (get stacks-height r)
+        stacks-height: (get stacks-height r),
+        bitcoin-height: (get bitcoin-height r)
       })
     ERR-UNKNOWN-RECEIPT
   )
