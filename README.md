@@ -95,8 +95,6 @@ a slogan.
 
 Errors are namespaced: `u1xx` registry, `u2xx` disbursement.
 
----
-
 ## Status
 
 **Working:** both disbursement paths, the registry with its suspension cascade,
