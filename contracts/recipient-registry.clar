@@ -82,3 +82,32 @@
     (ok true)
   )
 )
+
+;; ----------------------------------------------------------- organizer-only
+
+(define-public (register-recipient (payout principal) (profile (buff 32)))
+  (let (
+      (org (unwrap! (map-get? organizers tx-sender) ERR-NOT-ORGANIZER))
+      (recipient-id (var-get next-recipient-id))
+    )
+    (asserts! (get active org) ERR-ORGANIZER-SUSPENDED)
+    (map-set recipients recipient-id {
+      payout: payout,
+      organizer: tx-sender,
+      profile: profile,
+      active: true,
+      registered-at: stacks-block-height
+    })
+    (map-set organizers tx-sender
+      (merge org { recipients-registered: (+ (get recipients-registered org) u1) }))
+    (var-set next-recipient-id (+ recipient-id u1))
+    (print {
+      event: "recipient-registered",
+      recipient-id: recipient-id,
+      organizer: tx-sender,
+      payout: payout,
+      profile: profile
+    })
+    (ok recipient-id)
+  )
+)
