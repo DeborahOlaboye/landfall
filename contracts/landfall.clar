@@ -1,0 +1,44 @@
+;; Landfall - direct giving with proof of arrival
+;;
+;; The whole idea: there is no intermediary holding the money, so there is
+;; nothing to audit. A donor pays a named recipient directly and the
+;; settlement itself is the receipt.
+;;
+;; Every disbursement is recorded on chain at the block it landed in. That is
+;; the part a donor can check independently, years later, without trusting
+;; that this contract - or the company that deployed it - still exists.
+
+(use-trait ft-trait .sip-010-trait.sip-010-trait)
+
+;; ---------------------------------------------------------------- constants
+
+(define-constant ERR-UNKNOWN-RECIPIENT (err u200))
+(define-constant ERR-NOT-PAYABLE (err u201))
+(define-constant ERR-ZERO-AMOUNT (err u202))
+(define-constant ERR-TRANSFER-FAILED (err u203))
+(define-constant ERR-UNKNOWN-RECEIPT (err u204))
+(define-constant ERR-SELF-GIFT (err u205))
+
+;; ------------------------------------------------------------------- state
+
+(define-data-var next-receipt-id uint u1)
+(define-data-var total-landed-stx uint u0)
+
+;; asset: none = STX, some = the SIP-010 contract that moved
+(define-map receipts
+  uint
+  {
+    donor: principal,
+    recipient-id: uint,
+    payout: principal,
+    amount: uint,
+    asset: (optional principal),
+    memo: (optional (buff 34)),
+    stacks-height: uint
+  }
+)
+
+;; Running totals, so a recipient page or a donor page renders from one read
+;; instead of replaying every event.
+(define-map recipient-received { recipient-id: uint, asset: (optional principal) } uint)
+(define-map donor-given { donor: principal, asset: (optional principal) } uint)
