@@ -137,3 +137,18 @@
     (ok true)
   )
 )
+
+;; --------------------------------------------------------------- read-only
+
+(define-read-only (get-steward)
+  (var-get steward)
+)
+(define-read-only (get-organizer (who principal))
+  (map-get? organizers who)
+)
+(define-read-only (get-recipient (recipient-id uint))
+  (map-get? recipients recipient-id)
+)
+(define-read-only (get-recipient-count)
+  (- (var-get next-recipient-id) u1)
+)
