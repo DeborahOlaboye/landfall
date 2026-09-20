@@ -42,3 +42,46 @@
 ;; instead of replaying every event.
 (define-map recipient-received { recipient-id: uint, asset: (optional principal) } uint)
 (define-map donor-given { donor: principal, asset: (optional principal) } uint)
+
+;; --------------------------------------------------------------- internals
+
+(define-private (record
+    (recipient-id uint)
+    (payout principal)
+    (amount uint)
+    (asset (optional principal))
+    (memo (optional (buff 34)))
+  )
+  (let (
+      (receipt-id (var-get next-receipt-id))
+      (recipient-key { recipient-id: recipient-id, asset: asset })
+      (donor-key { donor: tx-sender, asset: asset })
+    )
+    (map-set receipts receipt-id {
+      donor: tx-sender,
+      recipient-id: recipient-id,
+      payout: payout,
+      amount: amount,
+      asset: asset,
+      memo: memo,
+      stacks-height: stacks-block-height
+    })
+    (map-set recipient-received recipient-key
+      (+ (default-to u0 (map-get? recipient-received recipient-key)) amount))
+    (map-set donor-given donor-key
+      (+ (default-to u0 (map-get? donor-given donor-key)) amount))
+    (var-set next-receipt-id (+ receipt-id u1))
+    (print {
+      event: "landed",
+      receipt-id: receipt-id,
+      donor: tx-sender,
+      recipient-id: recipient-id,
+      payout: payout,
+      amount: amount,
+      asset: asset,
+      memo: memo,
+      stacks-height: stacks-block-height
+    })
+    receipt-id
+  )
+)
