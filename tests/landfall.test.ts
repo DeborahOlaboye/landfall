@@ -157,3 +157,145 @@ describe("recipient-registry: vouching for people", () => {
     expect(good.result).toBeOk(Cl.bool(true));
   });
 });
+
+describe("landfall: money that lands", () => {
+  beforeEach(() => {
+    seed();
+  });
+
+  it("moves STX to the recipient and writes a receipt", () => {
+    const before = simnet.getAssetsMap().get("STX")?.get(recipient) ?? 0n;
+
+    const { result } = simnet.callPublicFn(
+      CORE,
+      "give",
+      [Cl.uint(1), Cl.uint(1_000_000), Cl.none()],
+      donor,
+    );
+    expect(result).toBeOk(Cl.uint(1));
+
+    const after = simnet.getAssetsMap().get("STX")?.get(recipient) ?? 0n;
+    expect(after - before).toBe(1_000_000n);
+  });
+
+  it("writes a receipt a donor can check for themselves", () => {
+    simnet.callPublicFn(
+      CORE,
+      "give",
+      [Cl.uint(1), Cl.uint(500_000), Cl.none()],
+      donor,
+    );
+    const { result } = simnet.callReadOnlyFn(
+      CORE,
+      "get-receipt",
+      [Cl.uint(1)],
+      donor,
+    );
+    const receipt = (result as any).value.value;
+    expect(receipt.donor).toStrictEqual(Cl.principal(donor));
+    expect(receipt.payout).toStrictEqual(Cl.principal(recipient));
+    expect(receipt.amount).toStrictEqual(Cl.uint(500_000));
+    expect(receipt.asset).toStrictEqual(Cl.none());
+    // The block it landed in - checkable later without trusting us.
+    expect(Number((receipt["stacks-height"] as any).value)).toBeGreaterThan(0);
+  });
+
+  it("accumulates totals for the recipient and the donor", () => {
+    simnet.callPublicFn(CORE, "give", [Cl.uint(1), Cl.uint(300), Cl.none()], donor);
+    simnet.callPublicFn(CORE, "give", [Cl.uint(1), Cl.uint(700), Cl.none()], donor);
+
+    const received = simnet.callReadOnlyFn(
+      CORE,
+      "get-recipient-received",
+      [Cl.uint(1), Cl.none()],
+      donor,
+    );
+    expect(received.result).toBeUint(1000);
+
+    const given = simnet.callReadOnlyFn(
+      CORE,
+      "get-donor-given",
+      [Cl.principal(donor), Cl.none()],
+      donor,
+    );
+    expect(given.result).toBeUint(1000);
+  });
+
+  it("verify() restates what happened", () => {
+    simnet.callPublicFn(CORE, "give", [Cl.uint(1), Cl.uint(42), Cl.none()], donor);
+    const { result } = simnet.callReadOnlyFn(CORE, "verify", [Cl.uint(1)], stranger);
+    const v = (result as any).value.value;
+    expect(v.landed).toStrictEqual(Cl.bool(true));
+    expect(v.amount).toStrictEqual(Cl.uint(42));
+  });
+
+  it("refuses an unknown recipient", () => {
+    const { result } = simnet.callPublicFn(
+      CORE,
+      "give",
+      [Cl.uint(999), Cl.uint(100), Cl.none()],
+      donor,
+    );
+    expect(result).toBeErr(Cl.uint(ERR_UNKNOWN_RECIPIENT));
+  });
+
+  it("refuses a zero amount", () => {
+    const { result } = simnet.callPublicFn(
+      CORE,
+      "give",
+      [Cl.uint(1), Cl.uint(0), Cl.none()],
+      donor,
+    );
+    expect(result).toBeErr(Cl.uint(ERR_ZERO_AMOUNT));
+  });
+
+  it("refuses giving to yourself", () => {
+    const { result } = simnet.callPublicFn(
+      CORE,
+      "give",
+      [Cl.uint(1), Cl.uint(100), Cl.none()],
+      recipient,
+    );
+    expect(result).toBeErr(Cl.uint(ERR_SELF_GIFT));
+  });
+
+  it("refuses a recipient the organizer has deactivated", () => {
+    simnet.callPublicFn(
+      REGISTRY,
+      "set-recipient-active",
+      [Cl.uint(1), Cl.bool(false)],
+      organizer,
+    );
+    const { result } = simnet.callPublicFn(
+      CORE,
+      "give",
+      [Cl.uint(1), Cl.uint(100), Cl.none()],
+      donor,
+    );
+    expect(result).toBeErr(Cl.uint(ERR_NOT_PAYABLE));
+  });
+
+  it("stops payouts to everyone an organizer vouched for when that organizer is suspended", () => {
+    // The point of tying recipients to an organizer: suspending the organizer
+    // suspends their whole roster, without touching each record.
+    simnet.callPublicFn(
+      REGISTRY,
+      "set-organizer-active",
+      [Cl.principal(organizer), Cl.bool(false)],
+      deployer,
+    );
+    const { result } = simnet.callPublicFn(
+      CORE,
+      "give",
+      [Cl.uint(1), Cl.uint(100), Cl.none()],
+      donor,
+    );
+    expect(result).toBeErr(Cl.uint(ERR_NOT_PAYABLE));
+  });
+
+  it("leaves no receipt behind when a gift is refused", () => {
+    simnet.callPublicFn(CORE, "give", [Cl.uint(1), Cl.uint(0), Cl.none()], donor);
+    const { result } = simnet.callReadOnlyFn(CORE, "get-receipt-count", [], donor);
+    expect(result).toBeUint(0);
+  });
+});
