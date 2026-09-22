@@ -21,3 +21,6 @@ npm-debug.log*
 coverage
 *.info
 *.tsbuildinfo
+
+# local env
+.env

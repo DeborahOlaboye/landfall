@@ -3,7 +3,9 @@
 **Direct giving on Stacks. The donor pays a named recipient, and the settlement
 is the receipt.**
 
-Built with Clarity, sBTC and BNS. Contracts and tests are working.
+Built with Clarity and sBTC. Live on Stacks testnet at
+`ST3WWPTZFGXKGZ18PKX2YZEJJZCPQNBBWQ3K1ND3H`. Anyone can call `verify(u1)` on
+`.landfall` and read a real receipt, no wallet needed.
 
 ## The problem
 
@@ -95,9 +97,37 @@ a slogan.
 
 Errors are namespaced: `u1xx` registry, `u2xx` disbursement.
 
+## The app
+
+```
+contracts/    Clarinet project, the Clarity contracts and their tests
+frontend/     Vite and React, five screens
+```
+
+Five screens: an overview, the donor give flow in two directions, the organizer
+roster with off-chain record hashing, the steward console with the suspension
+cascade, and receipt verification in two layouts.
+
+Verification reads live from the deployed contract. Receipt #1 is a real 25,000
+sat gift, not a mock. Recipients come from the registry where it has data and
+fall back to labelled samples where it does not. Names and circumstances stay
+off chain by design, only their hash is published.
+
+```sh
+cd contracts && npm install && clarinet check && npm test
+cd frontend  && npm install && npm run dev
+```
+
 ## Status
 
-**Working:** both disbursement paths, the registry with its suspension cascade,
-receipts with dual-chain heights, per-asset totals, and `verify()`. 4 contracts,
-0 errors, 22 passing tests.
+**Working:** four contracts deployed and exercised end to end on testnet. An
+organizer admitted, a recipient registered, an sBTC gift settled into receipt
+number 1. Both disbursement paths, the registry with its suspension cascade,
+receipts with dual-chain heights, per-asset totals, and `verify()`. 0 errors,
+22 passing tests, and a frontend reading the live contract.
+
+**Not yet:** BNS identity for organizers, post-condition enforcement in the
+wallet, and conditional release against a named obligation. Mainnet stays gated
+behind a multisig steward and an audit, and the test-only `mock-sbtc` is never
+deployed past a test chain.
 
