@@ -5,7 +5,9 @@ is the receipt.**
 
 Built with Clarity and sBTC. Live on Stacks testnet at
 `ST3WWPTZFGXKGZ18PKX2YZEJJZCPQNBBWQ3K1ND3H`. Anyone can call `verify(u1)` on
-`.landfall` and read a real receipt, no wallet needed.
+`.landfall` and read a receipt, no wallet needed. See
+[what the testnet deployment does and does not prove](#what-the-testnet-run-proves)
+before reading anything into that receipt.
 
 ## The problem
 
@@ -60,7 +62,7 @@ rather than decorative.
 | Stacks capability | What it does here |
 |---|---|
 | **Clarity** | Decidable and non-Turing-complete, so the disbursement path can be *statically checked* rather than only tested. The guards are deliberately inlined so Clarinet's analyzer can verify every argument is validated before use — see the note in `landfall.clar`. |
-| **sBTC** | The asset donors hold and recipients want. The gift never has to become a local currency in between, and never sits in an intermediary account awaiting conversion. |
+| **sBTC** | The asset donors hold and recipients want. The gift never sits in an intermediary account awaiting conversion, and the recipient decides if and when to convert. Converting to local currency still costs them, roughly 2 to 4% via peg-out and a licensed local exchange, against 6 to 10% on conventional remittance corridors. |
 | **BNS** | Organizers and institutions are meant to be *named* (`ikejabaptist.btc`), not raw principals. A trust model built on public accountability needs human-readable identity. **Not yet implemented — next milestone.** |
 | **Post-conditions** | A donor's wallet can enforce "exactly this amount leaves my account and nothing else" at the protocol level, independent of our contract being correct. **Frontend enforcement pending.** |
 | **Proof of Transfer** | Every receipt records the Bitcoin block it settled under, so a donor verifies against Bitcoin rather than against us — and the claim survives this contract and this company disappearing. |
@@ -108,10 +110,9 @@ Five screens: an overview, the donor give flow in two directions, the organizer
 roster with off-chain record hashing, the steward console with the suspension
 cascade, and receipt verification in two layouts.
 
-Verification reads live from the deployed contract. Receipt #1 is a real 25,000
-sat gift, not a mock. Recipients come from the registry where it has data and
-fall back to labelled samples where it does not. Names and circumstances stay
-off chain by design, only their hash is published.
+Verification reads live from the deployed contract. Recipients come from the
+registry where it has data and fall back to labelled samples where it does not.
+Names and circumstances stay off chain by design, only their hash is published.
 
 ```sh
 cd contracts && npm install && clarinet check && npm test
@@ -120,14 +121,44 @@ cd frontend  && npm install && npm run dev
 
 ## Status
 
-**Working:** four contracts deployed and exercised end to end on testnet. An
-organizer admitted, a recipient registered, an sBTC gift settled into receipt
-number 1. Both disbursement paths, the registry with its suspension cascade,
-receipts with dual-chain heights, per-asset totals, and `verify()`. 0 errors,
-22 passing tests, and a frontend reading the live contract.
+**Working:** four contracts deployed on testnet, with both disbursement paths,
+the registry and its suspension cascade, receipts carrying dual-chain heights,
+per-asset totals, and `verify()`. 0 errors, 22 passing tests, and a frontend
+reading the live contract.
 
-**Not yet:** BNS identity for organizers, post-condition enforcement in the
+### What the testnet run proves
+
+Less than it might look like, and it is worth being exact.
+
+The end-to-end run on testnet was a smoke test, not a gift. One key did
+everything: the deployer published `mock-sbtc`, minted itself 100,000,000 units
+of a token it had just invented, set itself as steward, added itself as
+organizer, registered recipient #1 pointing at a standard Clarinet test address
+nobody controls, then sent 25,000 of those minted units to it.
+
+So receipt #1 proves the call path executes and the receipt shape is correct. It
+is not evidence that anyone gave anything. The flow has **not** been run with
+canonical testnet sBTC, and **not** with separate organizer, recipient and donor
+wallets. Doing that properly, and publishing the four addresses and transaction
+IDs, is the next deliverable.
+
+### Known limitations
+
+Two are structural and being fixed, both surfaced in grant review:
+
+- **`give` accepts any SIP-010 token.** The trait exists so tests can pass in a
+  mock, but it means anyone can deploy a worthless token and mint receipts that
+  `verify` reports as landed. A steward-maintained allowlist, seeded with
+  canonical sBTC only, is pending. Any metric read off receipts should filter on
+  asset until then.
+- **`update-payout` has no guard beyond the organizer's own signature.** An
+  organizer can redirect a recipient's payouts with no confirmation, delay or
+  review. A two-step change with recipient confirmation or a timelock veto is
+  pending. Receipts already written are unaffected, since each records the payout
+  address at the time of the gift.
+
+**Also not yet:** BNS identity for organizers, post-condition enforcement in the
 wallet, and conditional release against a named obligation. Mainnet stays gated
-behind a multisig steward and an audit, and the test-only `mock-sbtc` is never
-deployed past a test chain.
+behind a multisig steward and a security review, and the test-only `mock-sbtc`
+is never deployed past a test chain.
 
